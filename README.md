@@ -22,3 +22,4 @@ Neural_simplified_MS.py  |         simplified neural OMS(type4)          |  is_w
 Neural_MS_damping.py     |        neural NOMS with damping(type5)         |    single_damping=False, others default
 Neural_MS_damping.py     |   simplified neural NOMS with damping(type6)   |      single_damping=True, others default
 Neural_MS_multiloss.py   |    neural NOMS but not iteration-by-iteration  |               default
+
