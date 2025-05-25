@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
+from joblib import Parallel, delayed
+import multiprocessing
 
 # 1. BaseGraph2_Set0 읽기
 base_pcm = np.loadtxt("./BaseGraph/BaseGraph2_Set0.txt", dtype=int, delimiter='\t')
@@ -16,7 +17,6 @@ def expand_pcm(base_pcm, Z):
             entry = base_pcm[m, n]
             if entry == -1:
                 continue  # zero block
-            # cyclically shifted identity matrix
             I = np.eye(Z, dtype=int)
             shift = entry % Z
             block = np.roll(I, shift, axis=1)
@@ -28,7 +28,7 @@ M, N = H.shape
 K = N - M
 print(f"Expanded H: {H.shape}, Code rate={K/N:.3f}")
 
-# 2. 인코딩 함수
+# 2. 인코딩 함수 (변경 없음)
 def solve_gf2(A, b):
     A = A.copy()
     b = b.copy()
@@ -117,35 +117,37 @@ def ms_decode(llr, H, num_iter=500):
     return hard_dec
 
 # 시뮬레이션 파라미터
-snr_db_list = np.arange(-4, 6, 0.5)
+snr_db_list = np.arange(-4, 0, 0.2)
 num_blocks = 20000  # 실제 논문 수준 실험은 500~10000 정도 권장
 num_iter = 25
 
-# 결과 저장
+# 병렬화 함수: 한 SNR에서의 블록 실험
+def simulate_one_block(snr_db, K, H, num_iter):
+    info_bits = np.zeros(K, dtype=int)  # all-zero word (성능 worst-case 아님. 랜덤도 가능)
+    codeword = ldpc_encode_systematic(info_bits, H)
+    tx = bpsk_mod(codeword)
+    rx = awgn_channel(tx, snr_db)
+    llr = llr_awgn(rx, snr_db)
+    dec = ms_decode(llr, H, num_iter=num_iter)
+    block_error = not np.all(dec[:K] == info_bits)
+    bit_error = np.sum(dec[:K] != info_bits)
+    return block_error, bit_error
+
+# 전체 시뮬레이션 (SNR별로 병렬 처리)
 ber_list = []
 bler_list = []
+n_jobs = multiprocessing.cpu_count()  # 사용 가능한 코어 수
 
 for snr_db in tqdm(snr_db_list, desc="SNR sweep"):
-    bit_errors = 0
-    block_errors = 0
-    total_bits = 0
-    total_blocks = 0
-    for _ in range(num_blocks):
-        info_bits = np.zeros(K, dtype=int)  # all-zero word (성능 worst-case 아님. 랜덤도 가능)
-        codeword = ldpc_encode_systematic(info_bits, H)
-        tx = bpsk_mod(codeword)
-        rx = awgn_channel(tx, snr_db)
-        llr = llr_awgn(rx, snr_db)
-        dec = ms_decode(llr, H, num_iter=num_iter)
-        # 정보비트만 평가(BLER/BER)
-        block_error = not np.all(dec[:K] == info_bits)
-        bit_error = np.sum(dec[:K] != info_bits)
-        block_errors += block_error
-        bit_errors += bit_error
-        total_bits += K
-        total_blocks += 1
-    bler = max(block_errors / total_blocks, 1e-7)
-    ber = max(bit_errors / total_bits, 1e-9)    
+    # block 단위 병렬화
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(simulate_one_block)(snr_db, K, H, num_iter)
+        for _ in range(num_blocks)
+    )
+    block_errors = sum(r[0] for r in results)
+    bit_errors = sum(r[1] for r in results)
+    bler = max(block_errors / num_blocks, 1e-7)
+    ber = max(bit_errors / (num_blocks * K), 1e-9)
     bler_list.append(bler)
     ber_list.append(ber)
     print(f"SNR={snr_db:.2f}dB, BLER={bler:.4e}, BER={ber:.4e}")
