@@ -28,7 +28,7 @@ M, N = H.shape
 K = N - M
 print(f"Expanded H: {H.shape}, Code rate={K/N:.3f}")
 
-# 2. 인코딩 함수 (변경 없음)
+# 2. 인코딩 함수
 def solve_gf2(A, b):
     A = A.copy()
     b = b.copy()
@@ -117,8 +117,8 @@ def ms_decode(llr, H, num_iter=500):
     return hard_dec
 
 # 시뮬레이션 파라미터
-snr_db_list = np.arange(-4, 0, 0.2)
-num_blocks = 20000  # 실제 논문 수준 실험은 500~10000 정도 권장
+snr_db_list = np.arange(-4, 0, 0.5)  # SNR 범위
+num_blocks = 40000  # 실제 논문 수준 실험은 500~10000 정도 권장
 num_iter = 25
 
 # 병렬화 함수: 한 SNR에서의 블록 실험
@@ -154,12 +154,14 @@ for snr_db in tqdm(snr_db_list, desc="SNR sweep"):
 
 # --- 결과 시각화 ---
 plt.figure(figsize=(8,5))
-plt.semilogy(snr_db_list, bler_list, '-o', label='BLER (Block Error Rate)')
-plt.semilogy(snr_db_list, ber_list, '-s', label='BER (Bit Error Rate)')
-plt.xlabel("SNR (dB)")
-plt.ylabel("Error Rate")
-plt.title(f"LDPC MS-Decoder\n(N={N}, K={K}, Z={Z}, Iter={num_iter})")
-plt.grid(True, which='both')
-plt.legend()
+plt.semilogy(snr_db_list, bler_list, '-o', label='BLER (Block Error Rate)', markersize=4, linewidth=1.3)
+plt.semilogy(snr_db_list, ber_list, '-s', label='BER (Bit Error Rate)', markersize=4, linewidth=1.3)
+plt.xlabel("SNR (dB)", fontsize=13)
+plt.ylabel("Error Rate", fontsize=13)
+plt.title(f"LDPC MS-Decoder\n(N={N}, K={K}, Z={Z}, Iter={num_iter})", fontsize=14)
+plt.ylim(1e-7, 1e-1)
+plt.grid(True, which='both', linestyle=':', color='gray', linewidth=0.9, alpha=0.6)
+plt.legend(fontsize=11)
 plt.tight_layout()
+plt.savefig("ldpc_log_plot.pdf")  # 논문 제출용 벡터 그래프 저장
 plt.show()
